@@ -8,7 +8,7 @@ do
 	echo "#include \"number_small_$i.h\"" >> images.h
 done
 
-other_files=(thermometer dot humidity home percent)
+other_files=(thermometer dot humidity home percent deg)
 
 for item in ${other_files[*]}
 do

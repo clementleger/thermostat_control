@@ -14,7 +14,7 @@
 #define COLORED     0
 #define UNCOLORED   1
 
-#define BUSY_PIN D0
+#define BUSY_PIN D3
 #define DC_PIN D2
 #define RST_PIN D1
 
@@ -37,10 +37,34 @@ Paint paint(image, 400, 300);    //width should be the multiple of 8
 
 #define NUMBER_SPACING 2
 
+#define DISP_X_START 20
+#define DISP_Y_START 30
+#define HUMIDITY_Y_OFFSET 20
+#define HUMIDITY_X_OFFSET 20
+#define SETPOINT_Y_OFFSET 20
+#define SETPOINT_X_OFFSET 4
+
+
 struct image {
 	unsigned char *data;
 	unsigned int width;
 	unsigned int height;
+};
+
+const struct image humidity_image = {
+	(unsigned char *) humidity_data, HUMIDITY_WIDTH, HUMIDITY_HEIGHT
+};
+
+const struct image home_image = {
+	(unsigned char *) home_data, HOME_WIDTH, HOME_HEIGHT
+};
+
+const struct image percent_image = {
+	(unsigned char *) percent_data, PERCENT_WIDTH, PERCENT_HEIGHT
+};
+
+const struct image deg_image = {
+	(unsigned char *) deg_data, DEG_WIDTH, DEG_HEIGHT
 };
 
 const struct image numberToImage[] = {
@@ -89,11 +113,10 @@ void setup()
 
 	/* This clears the SRAM of the e-paper display */
 	epd.ClearFrame();
-	epd.DisplayFrame();
 	Serial.println("Clear frame");
 }
 
-int executeRequest(String request, String &ret)
+static int executeRequest(String request, String &ret)
 {
 	http.begin(CALAOS_API);
 	http.addHeader("Content-Type", "application/json");
@@ -110,7 +133,7 @@ int executeRequest(String request, String &ret)
 	return 0;
 }
 
-int calaosGetState(String item)
+static int calaosGetState(String item)
 {
 	String output;
 	String payload;
@@ -139,7 +162,7 @@ int calaosGetState(String item)
 }
 
 
-int calaosGetFloatValue(String item, float *value)
+static int calaosGetFloatValue(String item, float *value)
 {
 	int ret = calaosGetState(item);
 
@@ -151,7 +174,7 @@ int calaosGetFloatValue(String item, float *value)
 }
 
 
-int calaosSetState(String item, String item_value)
+static int calaosSetState(String item, String item_value)
 {
 	String output;
 	String payload;
@@ -181,7 +204,7 @@ int calaosSetState(String item, String item_value)
 	return status;
 }
 
-int setTempSetpoint(float value)
+static int setTempSetpoint(float value)
 {
 	return calaosSetState(HEATER_SETPOINT, String(value, 0));
 }
@@ -224,21 +247,23 @@ static void drawTemp(int x, int y, float temp)
 	
 }
 
-void drawHumidity(int x, int y, int unsigned hum)
+static void drawSmallText(int x, int y, unsigned int value,
+		const struct image *pre_image,
+		const struct image *post_image)
 {
-	int tens_d = (int) (hum / 10) % 10;
-	int ones_d = (int) hum % 10;
+	int tens_d = (int) (value / 10) % 10;
+	int ones_d = (int) value % 10;
 	unsigned int current_x = x;
 	const struct image *tens = &smallNumberToImage[tens_d];
 	const struct image *ones = &smallNumberToImage[ones_d];
-	String str_hum = String(hum);
-	str_hum += "%";
 
-	paint.CopyProgmemImage(current_x, y,
-		(unsigned char *) humidity_data,
-		HUMIDITY_WIDTH, HUMIDITY_HEIGHT);
-
-	current_x += HUMIDITY_WIDTH + 8;
+	if (pre_image) {
+		paint.CopyProgmemImage(current_x, y,
+			pre_image->data,
+			pre_image->width, pre_image->height);
+	
+		current_x += pre_image->width + 8;
+	}
 	paint.CopyProgmemImage(current_x, y,
 		tens->data,
 		tens->width, tens->height);
@@ -248,34 +273,31 @@ void drawHumidity(int x, int y, int unsigned hum)
 		ones->data,
 		ones->width, ones->height);
 
-	current_x += NUMBER_SPACING + ones->width;
-	paint.CopyProgmemImage(current_x, y,
-		(unsigned char *) percent_data,
-		PERCENT_WIDTH, PERCENT_HEIGHT);
-
+	if (post_image) {
+		current_x += NUMBER_SPACING + ones->width;
+		paint.CopyProgmemImage(current_x, y,
+			post_image->data,
+			post_image->width, post_image->height);
+	}
 
 }
 
-#define DISP_X_START 20
-#define DISP_Y_START 30
-#define HUMIDITY_Y_OFFSET 20
-#define HUMIDITY_X_OFFSET 20
-#define SETPOINT_Y_OFFSET 20
-#define SETPOINT_X_OFFSET 20
-
 void loop()
 {
-	float v, in_temp = 0, in_humid = 0;
-
+	float setpoint = 0, in_temp = 0, in_humid = 0;
+	int current_y = DISP_Y_START;
 	//~ calaosGetState(OUTDOOR_TEMP, out_temp);
 	//~ calaosGetState(OUTDOOR_HUMIDITY, out_humid);
 	calaosGetFloatValue(INDOOR_TEMP, &in_temp);
 	calaosGetFloatValue(INDOOR_HUMIDITY, &in_humid);
-	calaosGetFloatValue(HEATER_SETPOINT, &v);
+	calaosGetFloatValue(HEATER_SETPOINT, &setpoint);
 
 	paint.Clear(UNCOLORED);
-	drawTemp(DISP_X_START, DISP_Y_START, in_temp);
-	drawHumidity(DISP_X_START + HUMIDITY_X_OFFSET, DISP_Y_START + NUMBER_0_HEIGHT + HUMIDITY_Y_OFFSET, in_humid);
+	drawTemp(DISP_X_START, current_y, in_temp);
+	current_y += NUMBER_0_HEIGHT + HUMIDITY_Y_OFFSET;
+	drawSmallText(DISP_X_START + HUMIDITY_X_OFFSET, current_y, in_humid, &humidity_image, &percent_image);
+	current_y += NUMBER_SMALL_0_HEIGHT + SETPOINT_Y_OFFSET;
+	drawSmallText(DISP_X_START + SETPOINT_X_OFFSET, current_y, setpoint, &home_image, &deg_image);
 
 	//~ String s =  "Consigne: " + String(v, 0) + "C";
 	//~ paint.DrawStringAt(0, 30, s.c_str(), &Font24, COLORED);
@@ -292,6 +314,5 @@ void loop()
 
 	epd.SetPartialWindow(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
 	epd.DisplayFrame();
-	delay(20000);
-  
+	ESP.deepSleep(60e6);
 }

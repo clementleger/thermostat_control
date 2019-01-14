@@ -23,3 +23,4 @@
 #include "humidity.h"
 #include "home.h"
 #include "percent.h"
+#include "deg.h"

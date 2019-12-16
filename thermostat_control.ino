@@ -15,8 +15,8 @@
 #define UNCOLORED   1
 
 #define BUSY_PIN D3
-#define DC_PIN D2
-#define RST_PIN D1
+#define DC_PIN D6
+#define RST_PIN D4
 
 Epd epd(SS, DC_PIN, BUSY_PIN, RST_PIN);
 
@@ -314,5 +314,5 @@ void loop()
 
 	epd.SetPartialWindow(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
 	epd.DisplayFrame();
-	ESP.deepSleep(60e6);
+	ESP.deepSleep(120e6);
 }
